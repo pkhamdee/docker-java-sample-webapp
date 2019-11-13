@@ -5,6 +5,8 @@ docker-java-sample-webapp
 
 - Build the java app
 
+http://sample-webapp-namespace.dev1.pcfgcp.pkhamdee.com/sample-webapp?name=World
+
 `mvn clean install`
 
 - Take the war file from `target` & put it into `src/main/docker` directory.
@@ -21,7 +23,7 @@ docker-java-sample-webapp
 
 `docker container run -p 8080:8080 tomcat:1`
 
-- Go to `http://localhost:8080/docker-java-sample-webapp-1.0-SNAPSHOT?name=World` & see the app running in docker
+- Go to `http://localhost:8080/sample-webapp-1.0-SNAPSHOT?name=World` & see the app running in docker
 
 - List all containers
 

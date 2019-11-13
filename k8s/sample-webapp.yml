@@ -1,0 +1,67 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+   name: sample-webapp-namespace
+
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: sample-webapp-ing
+  namespace: sample-webapp-namespace
+  labels:
+    app: sample-webapp
+spec:
+  rules:
+  - host: sample-webapp-namespace.dev1.pcfgcp.pkhamdee.com
+    http:
+      paths:
+      - backend:
+          serviceName: sample-webapp-svc
+          servicePort: 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-webapp-svc
+  namespace: sample-webapp-namespace
+  labels:
+    app: sample-webapp
+spec:
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  selector:
+    app: sample-webapp
+
+---
+apiVersion: apps/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    app: sample-webapp
+  namespace: sample-webapp-namespace
+  name: sample-webapp
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: sample-webapp
+      annotations:
+        kubernetes.io/change-cause: "FIXME"
+    spec:
+      containers:
+      - name: sample-webapp
+        image: harbor.pcfgcp.pkhamdee.com/library/sample-webapp:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080

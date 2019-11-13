@@ -1,4 +1,10 @@
 ---
+resource_types:
+  - name: kubernetes
+    type: docker-image
+    source:
+      repository: zlabjp/kubernetes-resource
+      tag: "latest"
 resources:
   - name: repo-master
     type: git
@@ -38,11 +44,16 @@ resources:
       ca_certs:
       - domain: ((harbor-hostname)):443
         cert: ((harbor-ca))
+  - name: k8s-develop
+    type: kubernetes
+    source:
+      kubeconfig: {{kubeconfig-develop}}       
 params:
   git: &GIT_PARAMS
     GIT_EMAIL: ((git-email))
     GIT_NAME: ((git-name))
     SRC_BRANCH: develop
+    
 jobs:
 ### Dev
 - name: docker-push-develop
@@ -103,6 +114,42 @@ jobs:
       build: updated
       build_args:
         JAR_FILE: sample-webapp.war
+
+- name: deploy-k8s-develop
+  plan:
+  - get: harbor
+    trigger: true
+    passed: [docker-push-develop]
+  - get: repo
+    resource: repo-develop
+  - task: update-k8s-manifest
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: ubuntu
+      inputs:
+      - name: repo
+      - name: harbor
+      outputs:
+      - name: updated
+      run:
+        path: bash
+        args:
+        - -c
+        - |
+          set -e
+          HEADID=`cat repo-src/.git/HEAD`
+          sed "s|:latest|:${HEADID}|g" repo/k8s/sample-webapp.yml | \
+          sed "s|FIXME|Bump to ${HEADID}|g" | \
+          sed "s|sample-webapp-namespace|sample-webapp-dev|g" > updated/sample-webapp.yml  
+  - put: k8s-develop
+    params:
+      kubectl: apply -f updated/sample-webapp.yml
+      wait_until_ready: 120
+      wait_until_ready_selector: app=sample-webapp
+
 ### Prod
 - name: merge-develop-to-master
   build_logs_to_retain: 5
@@ -111,7 +158,7 @@ jobs:
     - get: repo-src
       resource: repo-develop
       passed:
-      - docker-push-develop
+      - deploy-k8s-develop
     - get: repo-dest
       resource: repo-master
   - task: merge-develop-to-master
