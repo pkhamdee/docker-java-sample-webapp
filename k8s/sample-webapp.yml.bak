@@ -61,7 +61,7 @@ spec:
     spec:
       containers:
       - name: sample-webapp
-        image: harbor.pcfgcp.pkhamdee.com/library/sample-webapp:1.0.0
+        image: harbor.pcfgcp.pkhamdee.com/library/sample-webapp:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
