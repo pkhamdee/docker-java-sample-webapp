@@ -1,7 +1,7 @@
 docker-java-sample-webapp
 =========================
 
-## Getting started
+## Getting started..
 
 - Build the java app
 
