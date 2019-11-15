@@ -5,8 +5,6 @@ docker-java-sample-webapp
 
 - Build the java app
 
-http://sample-webapp-dev.dev1.pcfgcp.pkhamdee.com/sample-webapp?name=World
-
 `mvn clean install`
 
 - Take the war file from `target` & put it into `src/main/docker` directory.
