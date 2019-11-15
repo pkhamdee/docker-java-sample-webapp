@@ -194,7 +194,27 @@ jobs:
           - -c
           - |
             echo "run integration test ..."
-
+- name: automate-test
+  plan:
+  - get: repo-src
+    resource: repo-develop
+    trigger: true
+    passed:
+      - deploy-k8s-develop
+  - task: run automate test
+    params:
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: maven
+      run:
+        path: bash
+        args:
+          - -c
+          - |
+            echo "run automate test ..."
 ### Prod
 - name: merge-develop-to-master
   build_logs_to_retain: 5
@@ -205,6 +225,7 @@ jobs:
       passed:
       - load-test-develop
       - integration-test
+      - automate-test
     - get: repo-dest
       resource: repo-master
   - task: merge-develop-to-master
