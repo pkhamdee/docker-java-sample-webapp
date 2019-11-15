@@ -47,13 +47,14 @@ resources:
   - name: k8s-develop
     type: kubernetes
     source:
-      kubeconfig: {{kubeconfig-develop}}       
+      kubeconfig: {{kubeconfig-develop}}
+             
 params:
   git: &GIT_PARAMS
     GIT_EMAIL: ((git-email))
     GIT_NAME: ((git-name))
     SRC_BRANCH: develop
-    
+
 jobs:
 ### Dev
 - name: docker-push-develop
@@ -140,15 +141,59 @@ jobs:
         - -c
         - |
           set -e
-          HEADID=`cat repo-src/.git/HEAD`
-          sed "s|:latest|:${HEADID}|g" repo/k8s/sample-webapp.yml | \
-          sed "s|FIXME|Bump to ${HEADID}|g" | \
+          HEADID=`cat repo/.git/HEAD`
+          sed "s|FIXME|Bump to ${HEADID}|g" repo/k8s/sample-webapp.yml | \
           sed "s|sample-webapp-namespace|sample-webapp-dev|g" > updated/sample-webapp.yml  
   - put: k8s-develop
     params:
       kubectl: apply -f updated/sample-webapp.yml
       wait_until_ready: 120
       wait_until_ready_selector: app=sample-webapp
+
+- name: load-test-develop
+  plan:
+  - get: repo-src
+    resource: repo-develop
+    trigger: true
+    passed:
+      - deploy-k8s-develop
+  - task: wrk
+    params:
+    config:
+      platform: linux
+      image_resource:
+        type: registry-image
+        source:
+          repository: skandyla/wrk
+      run:
+        path: sh
+        args:
+          - -c
+          - |
+            sleep 120
+            wrk -t16 -c200 -d30s --timeout 10s http://sample-webapp-dev.dev1.pcfgcp.pkhamdee.com/sample-webapp?name=World --latency
+
+- name: integration-test
+  plan:
+  - get: repo-src
+    resource: repo-develop
+    trigger: true
+    passed:
+      - deploy-k8s-develop
+  - task: run integration test
+    params:
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: maven
+      run:
+        path: bash
+        args:
+          - -c
+          - |
+            echo "run integration test ..."
 
 ### Prod
 - name: merge-develop-to-master
@@ -158,7 +203,8 @@ jobs:
     - get: repo-src
       resource: repo-develop
       passed:
-      - deploy-k8s-develop
+      - load-test-develop
+      - integration-test
     - get: repo-dest
       resource: repo-master
   - task: merge-develop-to-master
@@ -229,7 +275,7 @@ jobs:
           rm -rf ~/.m2
           ln -fs $(pwd)/m2 ~/.m2
           mvn versions:set -DnewVersion=${VERSION}
-          sed -i.bak "s/:latest/:${VERSION}/g" k8s/hello-pks.yml
+          sed -i.bak "s/:latest/:${VERSION}/g" k8s/sample-webapp.yml
           rm -f pom.xml.versionsBackup
           shopt -s dotglob
           shopt -s extglob
@@ -262,10 +308,130 @@ jobs:
     config:
       <<: *COPY_DOCKERFILE
   - put: harbor
-    params:
+    params: &DOCKER_MASTER
       <<: *DOCKER_PUSH
       tag: repo-version/number
       tag_as_latest: true
+
+- name: deploy-k8s-stage
+  plan:
+  - get: harbor
+    trigger: true
+    passed: [docker-push-master]
+  - get: repo
+    resource: repo-master
+  - task: update-k8s-manifest
+    params:
+      <<: *DOCKER_MASTER
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: ubuntu
+      inputs:
+      - name: repo
+      - name: harbor
+      outputs:
+      - name: updated
+      run:
+        path: bash
+        args:
+        - -c
+        - |
+          set -e
+          HEADID=`cat repo/.git/HEAD`
+          sed "s|:latest|:${tag}|g" repo/k8s/sample-webapp.yml | \
+          sed "s|FIXME|Bump to ${HEADID}|g" | \
+          sed "s|sample-webapp-namespace|sample-webapp-stage|g" > updated/sample-webapp.yml  
+  - put: k8s-develop
+    params:
+      kubectl: apply -f updated/sample-webapp.yml
+      wait_until_ready: 120
+      wait_until_ready_selector: app=sample-webapp
+
+- name: stage-test
+  plan:
+  - get: repo-src
+    resource: repo-master
+    trigger: true
+    passed:
+      - deploy-k8s-stage
+  - get: harbor
+    passed: [deploy-k8s-stage]    
+  - task: run stage test
+    params:
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: maven
+      run:
+        path: bash
+        args:
+          - -c
+          - |
+            echo "run stage test ..."
+
+- name: deploy-k8s-prod
+  plan:
+  - get: harbor
+    passed: [stage-test]
+  - get: repo
+    resource: repo-master
+  - task: update-k8s-manifest
+    params:
+      <<: *DOCKER_MASTER
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: ubuntu
+      inputs:
+      - name: repo
+      - name: harbor
+      outputs:
+      - name: updated
+      run:
+        path: bash
+        args:
+        - -c
+        - |
+          set -e
+          HEADID=`cat repo/.git/HEAD`
+          sed "s|:latest|:${tag}|g" repo/k8s/sample-webapp.yml | \
+          sed "s|FIXME|Bump to ${HEADID}|g" | \
+          sed "s|sample-webapp-namespace|sample-webapp-prod|g" > updated/sample-webapp.yml  
+  - put: k8s-develop
+    params:
+      kubectl: apply -f updated/sample-webapp.yml
+      wait_until_ready: 120
+      wait_until_ready_selector: app=sample-webapp
+
+- name: production-test
+  plan:
+  - get: repo-src
+    resource: repo-master
+    trigger: true
+    passed:
+      - deploy-k8s-prod
+  - task: run stage test
+    params:
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: maven
+      run:
+        path: bash
+        args:
+          - -c
+          - |
+            echo "run production test ..."            
+
 - name: bump-to-next-patch-version
   plan:
   - in_parallel:
@@ -333,7 +499,7 @@ jobs:
           rm -rf ~/.m2
           ln -fs $(pwd)/m2 ~/.m2
           mvn versions:set -DnewVersion=${VERSION}-SNAPSHOT -DallowSnapshots
-          sed -i.bak "s/:${VERSION}/:latest/g" k8s/hello-pks.yml
+          sed -i.bak "s/:${VERSION}/:latest/g" k8s/sample-webapp.yml
           rm -f pom.xml.versionsBackup
           shopt -s dotglob
           shopt -s extglob

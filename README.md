@@ -5,7 +5,7 @@ docker-java-sample-webapp
 
 - Build the java app
 
-http://sample-webapp-namespace.dev1.pcfgcp.pkhamdee.com/sample-webapp?name=World
+http://sample-webapp-dev.dev1.pcfgcp.pkhamdee.com/sample-webapp?name=World
 
 `mvn clean install`
 

@@ -6,10 +6,11 @@ docker-compose up -d
 fly login -t main -u test -p test -c http://localhost:8080
 
 #add pipeline
-fly -t main sp -p java-webapp \
+fly -t main sp -p sample-webapp \
     -c pipeline.yml \
+    --var "kubeconfig-develop=$(cat ~/.kube/config)" \
     -l credentials.yml \
     --var "harbor-ca=$(cat ca.crt)"
 
 #remove pipeline
-fly -t home dp -p java-webapp
+fly -t home dp -p sample-webapp
