@@ -1,7 +1,6 @@
 docker-java-sample-webapp
 =========================
 
-change text
 
 ## Getting started..
 
