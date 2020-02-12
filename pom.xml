@@ -10,7 +10,7 @@
     <packaging>war</packaging>
 
     <name>sample-webapp</name>
-    <description>Demo project for sample-webapp in docker</description>
+    <description>Demo project for sample-webapp in docker - test</description>
 
     <repositories>
         <repository>
