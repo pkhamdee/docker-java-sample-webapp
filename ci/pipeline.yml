@@ -243,7 +243,7 @@ jobs:
       image_resource:
         type: docker-image
         source:
-          repository: maven
+          repository: starkandwayne/concourse
       inputs:
       - name: repo-src
       - name: repo-dest
@@ -283,7 +283,7 @@ jobs:
       image_resource:
         type: docker-image
         source:
-          repository: maven
+          repository: starkandwayne/concourse
       inputs:
       - name: repo
       - name: repo-version
@@ -507,7 +507,7 @@ jobs:
       image_resource:
         type: docker-image
         source:
-          repository: maven
+          repository: starkandwayne/concourse
       inputs:
       - name: repo
       - name: repo-version
