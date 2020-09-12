@@ -14,7 +14,7 @@ metadata:
     app: sample-webapp
 spec:
   rules:
-  - host: sample-webapp-namespace.dev1.pcfgcp.pkhamdee.com
+  - host: sample-webapp-namespace.dev1.pkstest.local
     http:
       paths:
       - backend:
@@ -38,7 +38,7 @@ spec:
     app: sample-webapp
 
 ---
-apiVersion: apps/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -61,7 +61,7 @@ spec:
     spec:
       containers:
       - name: sample-webapp
-        image: harbor.pcfgcp.pkhamdee.com/library/sample-webapp:1.0.0
+        image: pkhamdee/sample-webapp:1.0.0
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
