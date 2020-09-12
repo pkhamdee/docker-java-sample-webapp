@@ -265,318 +265,319 @@ jobs:
   - put: repo-master
     params:
       repository: merged
-- name: tag-master
-  build_logs_to_retain: 5
-  plan:
-  - in_parallel:
-    - get: repo
-      resource: repo-master
-      trigger: true
-      passed:
-      - merge-develop-to-master
-    - get: repo-version
-  - task: mvn-versions-set
-    params:
-      <<: *GIT_PARAMS
-    config:
-      platform: linux
-      image_resource:
-        type: docker-image
-        source:
-          repository: starkandwayne/concourse
-      inputs:
-      - name: repo
-      - name: repo-version
-      outputs:
-      - name: output
-      caches:
-      - path: repo/m2   
-      run:
-        path: bash
-        args:
-        - -c
-        - |
-          set -e
-          VERSION=`cat repo-version/number`
-          cd repo
-          rm -rf ~/.m2
-          ln -fs $(pwd)/m2 ~/.m2
-          mvn versions:set -DnewVersion=${VERSION}
-          sed -i.bak "s/:latest/:${VERSION}/g" k8s/sample-webapp.yml
-          rm -f pom.xml.versionsBackup
-          shopt -s dotglob
-          shopt -s extglob
-          mv -f !(m2) ../output/
-          cd ../output
-          git config --global user.email "${GIT_EMAIL}"
-          git config --global user.name "${GIT_NAME}"
-          git add -A
-          git commit -m "Release ${VERSION}"
-  - put: repo-master
-    params:
-      repository: output
-      tag: repo-version/number
-- name: docker-push-master
-  build_logs_to_retain: 5
-  plan:
-  - in_parallel:
-    - get: repo
-      resource: repo-master
-      passed:
-      - tag-master
-      trigger: true
-    - get: repo-version
-      passed:
-      - tag-master
-  - task: mvn-package
-    config:
-      <<: *MVN_PACKAGE_CONFIG
-  - task: update-docker
-    config:
-      <<: *COPY_DOCKERFILE
-  - put: harbor
-    params: &DOCKER_MASTER
-      <<: *DOCKER_PUSH
-      tag: repo-version/number
-      tag_as_latest: true
+# - name: tag-master
+#   build_logs_to_retain: 5
+#   plan:
+#   - in_parallel:
+#     - get: repo
+#       resource: repo-master
+#       trigger: true
+#       passed:
+#       - merge-develop-to-master
+#     - get: repo-version
+#   - task: mvn-versions-set
+#     params:
+#       <<: *GIT_PARAMS
+#     config:
+#       platform: linux
+#       image_resource:
+#         type: docker-image
+#         source:
+#           repository: maven
+#       inputs:
+#       - name: repo
+#       - name: repo-version
+#       outputs:
+#       - name: output
+#       caches:
+#       - path: repo/m2   
+#       run:
+#         path: bash
+#         args:
+#         - -c
+#         - |
+#           apt install git-all
+#           set -e
+#           VERSION=`cat repo-version/number`
+#           cd repo
+#           rm -rf ~/.m2
+#           ln -fs $(pwd)/m2 ~/.m2
+#           mvn versions:set -DnewVersion=${VERSION}
+#           sed -i.bak "s/:latest/:${VERSION}/g" k8s/sample-webapp.yml
+#           rm -f pom.xml.versionsBackup
+#           shopt -s dotglob
+#           shopt -s extglob
+#           mv -f !(m2) ../output/
+#           cd ../output
+#           git config --global user.email "${GIT_EMAIL}"
+#           git config --global user.name "${GIT_NAME}"
+#           git add -A
+#           git commit -m "Release ${VERSION}"
+#   - put: repo-master
+#     params:
+#       repository: output
+#       tag: repo-version/number
+# - name: docker-push-master
+#   build_logs_to_retain: 5
+#   plan:
+#   - in_parallel:
+#     - get: repo
+#       resource: repo-master
+#       passed:
+#       - tag-master
+#       trigger: true
+#     - get: repo-version
+#       passed:
+#       - tag-master
+#   - task: mvn-package
+#     config:
+#       <<: *MVN_PACKAGE_CONFIG
+#   - task: update-docker
+#     config:
+#       <<: *COPY_DOCKERFILE
+#   - put: harbor
+#     params: &DOCKER_MASTER
+#       <<: *DOCKER_PUSH
+#       tag: repo-version/number
+#       tag_as_latest: true
 
-- name: deploy-k8s-stage
-  plan:
-  - get: harbor
-    trigger: true
-    passed: [docker-push-master]
-  - get: repo
-    resource: repo-master
-  - task: update-k8s-manifest
-    params:
-      <<: *DOCKER_MASTER
-    config:
-      platform: linux
-      image_resource:
-        type: docker-image
-        source:
-          repository: ubuntu
-      inputs:
-      - name: repo
-      - name: harbor
-      outputs:
-      - name: updated
-      run:
-        path: bash
-        args:
-        - -c
-        - |
-          set -e
-          HEADID=`cat repo/.git/HEAD`
-          sed "s|:latest|:${tag}|g" repo/k8s/sample-webapp.yml | \
-          sed "s|FIXME|Bump to ${HEADID}|g" | \
-          sed "s|sample-webapp-namespace|sample-webapp-stage|g" > updated/sample-webapp.yml  
-  - put: k8s-develop
-    params:
-      kubectl: apply -f updated/sample-webapp.yml
-      wait_until_ready: 120
-      wait_until_ready_selector: app=sample-webapp
+# - name: deploy-k8s-stage
+#   plan:
+#   - get: harbor
+#     trigger: true
+#     passed: [docker-push-master]
+#   - get: repo
+#     resource: repo-master
+#   - task: update-k8s-manifest
+#     params:
+#       <<: *DOCKER_MASTER
+#     config:
+#       platform: linux
+#       image_resource:
+#         type: docker-image
+#         source:
+#           repository: ubuntu
+#       inputs:
+#       - name: repo
+#       - name: harbor
+#       outputs:
+#       - name: updated
+#       run:
+#         path: bash
+#         args:
+#         - -c
+#         - |
+#           set -e
+#           HEADID=`cat repo/.git/HEAD`
+#           sed "s|:latest|:${tag}|g" repo/k8s/sample-webapp.yml | \
+#           sed "s|FIXME|Bump to ${HEADID}|g" | \
+#           sed "s|sample-webapp-namespace|sample-webapp-stage|g" > updated/sample-webapp.yml  
+#   - put: k8s-develop
+#     params:
+#       kubectl: apply -f updated/sample-webapp.yml
+#       wait_until_ready: 120
+#       wait_until_ready_selector: app=sample-webapp
 
-- name: stage-test
-  plan:
-  - get: repo-src
-    resource: repo-master
-    trigger: true
-    passed:
-      - deploy-k8s-stage
-  - get: harbor
-    passed: [deploy-k8s-stage]    
-  - task: run stage test
-    params:
-    config:
-      platform: linux
-      image_resource:
-        type: docker-image
-        source:
-          repository: maven
-      run:
-        path: bash
-        args:
-          - -c
-          - |
-            echo "run stage test ..."
+# - name: stage-test
+#   plan:
+#   - get: repo-src
+#     resource: repo-master
+#     trigger: true
+#     passed:
+#       - deploy-k8s-stage
+#   - get: harbor
+#     passed: [deploy-k8s-stage]    
+#   - task: run stage test
+#     params:
+#     config:
+#       platform: linux
+#       image_resource:
+#         type: docker-image
+#         source:
+#           repository: maven
+#       run:
+#         path: bash
+#         args:
+#           - -c
+#           - |
+#             echo "run stage test ..."
 
-- name: deploy-k8s-prod
-  plan:
-  - get: harbor
-    passed: [stage-test]
-  - get: repo
-    resource: repo-master
-  - task: update-k8s-manifest
-    params:
-      <<: *DOCKER_MASTER
-    config:
-      platform: linux
-      image_resource:
-        type: docker-image
-        source:
-          repository: ubuntu
-      inputs:
-      - name: repo
-      - name: harbor
-      outputs:
-      - name: updated
-      run:
-        path: bash
-        args:
-        - -c
-        - |
-          set -e
-          HEADID=`cat repo/.git/HEAD`
-          sed "s|:latest|:${tag}|g" repo/k8s/sample-webapp.yml | \
-          sed "s|FIXME|Bump to ${HEADID}|g" | \
-          sed "s|sample-webapp-namespace|sample-webapp-prod|g" > updated/sample-webapp.yml  
-  - put: k8s-develop
-    params:
-      kubectl: apply -f updated/sample-webapp.yml
-      wait_until_ready: 120
-      wait_until_ready_selector: app=sample-webapp
+# - name: deploy-k8s-prod
+#   plan:
+#   - get: harbor
+#     passed: [stage-test]
+#   - get: repo
+#     resource: repo-master
+#   - task: update-k8s-manifest
+#     params:
+#       <<: *DOCKER_MASTER
+#     config:
+#       platform: linux
+#       image_resource:
+#         type: docker-image
+#         source:
+#           repository: ubuntu
+#       inputs:
+#       - name: repo
+#       - name: harbor
+#       outputs:
+#       - name: updated
+#       run:
+#         path: bash
+#         args:
+#         - -c
+#         - |
+#           set -e
+#           HEADID=`cat repo/.git/HEAD`
+#           sed "s|:latest|:${tag}|g" repo/k8s/sample-webapp.yml | \
+#           sed "s|FIXME|Bump to ${HEADID}|g" | \
+#           sed "s|sample-webapp-namespace|sample-webapp-prod|g" > updated/sample-webapp.yml  
+#   - put: k8s-develop
+#     params:
+#       kubectl: apply -f updated/sample-webapp.yml
+#       wait_until_ready: 120
+#       wait_until_ready_selector: app=sample-webapp
 
-- name: production-test
-  plan:
-  - get: repo-src
-    resource: repo-master
-    trigger: true
-    passed:
-      - deploy-k8s-prod
-  - task: run stage test
-    params:
-    config:
-      platform: linux
-      image_resource:
-        type: docker-image
-        source:
-          repository: maven
-      run:
-        path: bash
-        args:
-          - -c
-          - |
-            echo "run production test ..."            
+# - name: production-test
+#   plan:
+#   - get: repo-src
+#     resource: repo-master
+#     trigger: true
+#     passed:
+#       - deploy-k8s-prod
+#   - task: run stage test
+#     params:
+#     config:
+#       platform: linux
+#       image_resource:
+#         type: docker-image
+#         source:
+#           repository: maven
+#       run:
+#         path: bash
+#         args:
+#           - -c
+#           - |
+#             echo "run production test ..."            
 
-- name: bump-to-next-patch-version
-  plan:
-  - in_parallel:
-    - get: repo-src
-      resource: repo-master
-      passed:
-      - docker-push-master
-      trigger: true
-    - get: repo-dest
-      resource: repo-develop
-    - get: repo-version
-      passed:
-      - docker-push-master
-      params:
-        bump: patch
-  - task: merge-master-to-develop
-    params:
-      <<: *GIT_PARAMS
-      SRC_BRANCH: master
-    config:
-      <<: *MERGE_SRC_TO_DEST
-  - task: just-move
-    config:
-      platform: linux
-      image_resource:
-        type: docker-image
-        source:
-          repository: maven
-      inputs:
-      - name: merged
-      outputs:
-      - name: repo
-      run:
-        path: bash
-        args:
-        - -c
-        - |
-          set -e
-          shopt -s dotglob
-          cp -r merged/* repo/
-  - task: mvn-versions-set
-    params:
-      <<: *GIT_PARAMS
-    config: &MVN_VERSIONS_SET_CONFIG
-      platform: linux
-      image_resource:
-        type: docker-image
-        source:
-          repository: starkandwayne/concourse
-      inputs:
-      - name: repo
-      - name: repo-version
-      outputs:
-      - name: output
-      caches:
-      - path: repo/m2   
-      run:
-        path: bash
-        args:
-        - -c
-        - |
-          set -e
-          VERSION=`cat repo-version/number`
-          cd repo
-          rm -rf ~/.m2
-          ln -fs $(pwd)/m2 ~/.m2
-          mvn versions:set -DnewVersion=${VERSION}-SNAPSHOT -DallowSnapshots
-          sed -i.bak "s/:${VERSION}/:latest/g" k8s/sample-webapp.yml
-          rm -f pom.xml.versionsBackup
-          shopt -s dotglob
-          shopt -s extglob
-          mv -f !(m2) ../output/
-          cd ../output
-          git config --global user.email "${GIT_EMAIL}"
-          git config --global user.name "${GIT_NAME}"
-          git add -A
-          git commit -m "Bump to ${VERSION}-SNAPSHOT"
-  - put: repo-develop
-    params:
-      repository: output
-  - put: repo-version
-    params:
-      file: repo-version/number
-- name: bump-to-next-minor-version
-  plan:
-  - in_parallel:
-    - get: repo
-      resource: repo-develop
-    - get: repo-version
-      params:
-        bump: minor
-  - task: mvn-versions-set
-    params:
-      <<: *GIT_PARAMS
-    config:
-      <<: *MVN_VERSIONS_SET_CONFIG
-  - put: repo-develop
-    params:
-      repository: output
-  - put: repo-version
-    params:
-      file: repo-version/number
-- name: bump-to-next-major-version
-  plan:
-  - in_parallel:
-    - get: repo
-      resource: repo-develop
-    - get: repo-version
-      params:
-        bump: major
-  - task: mvn-versions-set
-    params:
-      <<: *GIT_PARAMS
-    config:
-      <<: *MVN_VERSIONS_SET_CONFIG
-  - put: repo-develop
-    params:
-      repository: output
-  - put: repo-version
-    params:
-      file: repo-version/number
+# - name: bump-to-next-patch-version
+#   plan:
+#   - in_parallel:
+#     - get: repo-src
+#       resource: repo-master
+#       passed:
+#       - docker-push-master
+#       trigger: true
+#     - get: repo-dest
+#       resource: repo-develop
+#     - get: repo-version
+#       passed:
+#       - docker-push-master
+#       params:
+#         bump: patch
+#   - task: merge-master-to-develop
+#     params:
+#       <<: *GIT_PARAMS
+#       SRC_BRANCH: master
+#     config:
+#       <<: *MERGE_SRC_TO_DEST
+#   - task: just-move
+#     config:
+#       platform: linux
+#       image_resource:
+#         type: docker-image
+#         source:
+#           repository: maven
+#       inputs:
+#       - name: merged
+#       outputs:
+#       - name: repo
+#       run:
+#         path: bash
+#         args:
+#         - -c
+#         - |
+#           set -e
+#           shopt -s dotglob
+#           cp -r merged/* repo/
+#   - task: mvn-versions-set
+#     params:
+#       <<: *GIT_PARAMS
+#     config: &MVN_VERSIONS_SET_CONFIG
+#       platform: linux
+#       image_resource:
+#         type: docker-image
+#         source:
+#           repository: starkandwayne/concourse
+#       inputs:
+#       - name: repo
+#       - name: repo-version
+#       outputs:
+#       - name: output
+#       caches:
+#       - path: repo/m2   
+#       run:
+#         path: bash
+#         args:
+#         - -c
+#         - |
+#           set -e
+#           VERSION=`cat repo-version/number`
+#           cd repo
+#           rm -rf ~/.m2
+#           ln -fs $(pwd)/m2 ~/.m2
+#           mvn versions:set -DnewVersion=${VERSION}-SNAPSHOT -DallowSnapshots
+#           sed -i.bak "s/:${VERSION}/:latest/g" k8s/sample-webapp.yml
+#           rm -f pom.xml.versionsBackup
+#           shopt -s dotglob
+#           shopt -s extglob
+#           mv -f !(m2) ../output/
+#           cd ../output
+#           git config --global user.email "${GIT_EMAIL}"
+#           git config --global user.name "${GIT_NAME}"
+#           git add -A
+#           git commit -m "Bump to ${VERSION}-SNAPSHOT"
+#   - put: repo-develop
+#     params:
+#       repository: output
+#   - put: repo-version
+#     params:
+#       file: repo-version/number
+# - name: bump-to-next-minor-version
+#   plan:
+#   - in_parallel:
+#     - get: repo
+#       resource: repo-develop
+#     - get: repo-version
+#       params:
+#         bump: minor
+#   - task: mvn-versions-set
+#     params:
+#       <<: *GIT_PARAMS
+#     config:
+#       <<: *MVN_VERSIONS_SET_CONFIG
+#   - put: repo-develop
+#     params:
+#       repository: output
+#   - put: repo-version
+#     params:
+#       file: repo-version/number
+# - name: bump-to-next-major-version
+#   plan:
+#   - in_parallel:
+#     - get: repo
+#       resource: repo-develop
+#     - get: repo-version
+#       params:
+#         bump: major
+#   - task: mvn-versions-set
+#     params:
+#       <<: *GIT_PARAMS
+#     config:
+#       <<: *MVN_VERSIONS_SET_CONFIG
+#   - put: repo-develop
+#     params:
+#       repository: output
+#   - put: repo-version
+#     params:
+#       file: repo-version/number
